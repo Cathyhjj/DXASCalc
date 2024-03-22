@@ -1,0 +1,21 @@
+name: dxascalc
+channels:
+  - defaults
+dependencies:
+  - python=3.8
+  - numpy
+  - matplotlib
+  - scipy
+  - xraylib
+  - xoppylib
+  - dabax
+
+  - pip:
+    - xraylib
+    - dabax
+    - pandas
+    - matplotlib
+    - ipywidgets
+    - xraylib
+    - xoppylib
+    - dabax

@@ -15,6 +15,9 @@ import os
 import glob
 import re
 
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+
 def date_today():
     return datetime.datetime.today().strftime('%Y%m%d')
 
@@ -575,10 +578,6 @@ class BraggCrystalInvert(object):
         f_g = np.sin(theta0)/(2/self.R - np.sin(theta0)/self.p)
         return f_g
     
-
-import ipywidgets as widgets
-from IPython.display import display, clear_output
-
 style = {'description_width': '160px'}
 width = '300px'
 
