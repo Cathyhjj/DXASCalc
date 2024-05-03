@@ -1,5 +1,5 @@
 """
-Author: Juanjuan Huang, Advanced Photon Source
+Author: Juanjuan Huang, George Sterbinsky, Advanced Photon Source
 juanjuan.huang@anl.gov
 Copyright © 2023, UChicago Argonne, LLC
 """
@@ -808,7 +808,7 @@ class CrystalCalculator:
             # plt.close()
             # plt.clf() 
             self.CrystalObject.crystal_resolution_calc(scanfrom=scanfrom, scanto=scanto, plot=True)
-            clear_output()
+            # clear_output()
             
         total_energy_resolution = self.CrystalObject.fwhm_convolution() # 2 um FWHM
         
