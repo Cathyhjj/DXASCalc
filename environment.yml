@@ -1,16 +1,14 @@
 name: dxascalc
 channels:
   - defaults
+  - conda-forge 
 dependencies:
   - python=3.8
   - numpy
   - matplotlib
   - scipy
-  - xraylib
-  - xoppylib
-  - dabax
-
   - pip:
+    - pip
     - xraylib
     - dabax
     - pandas
