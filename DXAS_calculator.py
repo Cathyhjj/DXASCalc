@@ -388,11 +388,11 @@ class Laue_Crystal(Crystal):
     #     self.printlst['Laue13_energy_resolution'] = 'The energy spread for angular spread of %.03f microrad is: %.03f eV'%(angular_spread * 1e6, E_spread * 1000)
     #     return E_spread
     
-    def energy_resolution_calc(self, pixel_size=75):
+    def energy_resolution_calc(self, pixel_size=55):
         self.energy_resolution = self.energy_spread_bent * 1000 / (self.Laue_size/(pixel_size/1e6))
         return self.energy_resolution
 
-    def energy_resolution_detector_calc(self, pixel_size=75):
+    def energy_resolution_detector_calc(self, pixel_size=55):
         self.energy_resolution_detector = pixel_size *1e-6/(self.f_g - self.det2crys_d) * self.energy * 1000/np.tan(self.theta0)
         return self.energy_resolution_detector
     
@@ -505,7 +505,7 @@ class Bragg_Crystal(Crystal):
         self.printlst['Laue12_rotation_spread'] = 'rotation spread is: %f eV'%(1000*rotation_spread)
         return rotation_spread
 
-    def energy_resolution_calc(self, pixel_size=75):
+    def energy_resolution_calc(self, pixel_size=55):
         self.pixel_size = pixel_size
         self.energy_resolution = self.energy_spread_bent * 1000 / (self.Bragg_size/(pixel_size/1e6))
         self.printlst['Laue13_energy_resolution'] = 'Energy resolution (pixel size = %.1f): %.2f eV/pixel'%(pixel_size, self.energy_resolution)
@@ -636,15 +636,15 @@ class CrystalCalculator:
         self.content_text_l = widgets.IntText(value=1, placeholder='z',  disabled=False, step=1, layout=widgets.Layout(width='33px'))
 
         self.content_text_material = widgets.Dropdown(options=['Si', 'Ge'], value='Si', description='Material', disabled=False, layout=widgets.Layout(width=width), style=style)
-        self.content_text_p = widgets.BoundedFloatText(value=1.5, placeholder='Source-to-crystal distance', tooltip='Source-to-crystal distance', description='p distance [m]', disabled=False, step=.1, layout=widgets.Layout(width=width), style=style)
+        self.content_text_p = widgets.BoundedFloatText(value=1.2, placeholder='Source-to-crystal distance', tooltip='Source-to-crystal distance', description='p distance [m]', disabled=False, step=.1, layout=widgets.Layout(width=width), style=style)
         self.content_text_divergence = widgets.BoundedFloatText(value=1.2, min=0, max=1000000, placeholder='Incident beam\'s divergence', description='Divergence [mrad]', disabled=False, step=.1, layout=widgets.Layout(width=width), style=style)
         self.combobox_bent_flat = widgets.Dropdown(options=['Flat', 'Bent'], value='Bent', description = 'Crystal', disabled=False, layout=widgets.Layout(width=width), style=style)
 
-        self.content_text_R = widgets.FloatText(value=-0.5, placeholder='Bending radius', tooltip='positive -> focusing (concave); negative -> diverging (convex)', description='Radius [m]', disabled=True, step=.1, layout=widgets.Layout(width=width), style=style)
+        self.content_text_R = widgets.FloatText(value=-2.0, placeholder='Bending radius', tooltip='positive -> focusing (concave); negative -> diverging (convex)', description='Radius [m]', disabled=True, step=.1, layout=widgets.Layout(width=width), style=style)
         self.content_text_assymetry_angle = widgets.FloatText(value=0, placeholder='Bending radius', tooltip='positive -> upper condition; negative -> lower condition', description='Assy. angle [deg]', disabled=False, step=.1, layout=widgets.Layout(width=width), style=style)
         self.combobox_assymetry_condition = widgets.Dropdown(options=['upper', 'lower'], value='upper', description = 'Assymetry geometry', disabled=False, layout=widgets.Layout(width=width), style=style)
-        self.content_text_energy = widgets.BoundedFloatText(value=6000, min=1000, max=100000, placeholder='X-ray energy', tooltip='X-ray energy', description='X-ray energy [eV]', disabled=False, step=1000, layout=widgets.Layout(width=width), style=style)
-        self.content_text_detector_pixelsize = widgets.BoundedFloatText(value=75, min=0, max=1e6, step=10, tooltip='The pixel size of position-sensitive detector', description='Detector pixel size [um]', disabled=False, layout=widgets.Layout(width=width), style=style)
+        self.content_text_energy = widgets.BoundedFloatText(value=8000, min=1000, max=100000, placeholder='X-ray energy', tooltip='X-ray energy', description='X-ray energy [eV]', disabled=False, step=1000, layout=widgets.Layout(width=width), style=style)
+        self.content_text_detector_pixelsize = widgets.BoundedFloatText(value=55, min=0, max=1e6, step=10, tooltip='The pixel size of position-sensitive detector', description='Detector pixel size [um]', disabled=False, layout=widgets.Layout(width=width), style=style)
 
         # Layout
         self.hkl_box = widgets.HBox([self.content_text_h, 
