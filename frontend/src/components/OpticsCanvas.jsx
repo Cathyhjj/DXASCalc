@@ -16,6 +16,12 @@ import {
   positiveDistance,
 } from "../lib/opticsGeometry.js";
 
+import {
+  DETECTOR_DISTANCE_MODES,
+  detectorDistanceFromProjection,
+  detectorProjectionFactor,
+} from "../lib/detectorProjection.js";
+
 const PlotlyFigure = lazy(() => import("./PlotlyFigure.jsx"));
 
 const COLORS = Object.freeze({
@@ -48,8 +54,9 @@ function formatNumber(value, digits = 2) {
   return numeric.toFixed(digits);
 }
 
-function formatEditableDistance(value) {
-  return Number(value).toString();
+function formatEditableDistance(value, projection = false) {
+  if (!isAvailableNumber(value)) return "";
+  return projection ? Number(Number(value).toPrecision(8)).toString() : Number(value).toString();
 }
 
 function parseEditableDistance(value) {
@@ -61,34 +68,53 @@ function parseEditableDistance(value) {
     : null;
 }
 
-function DistanceLabelInput({ target, value, position, onCommit }) {
-  const [draft, setDraft] = useState(() => formatEditableDistance(value));
+function DistanceLabelInput({ target, value, position, onCommit, disabledReason = "" }) {
+  const isProjection = target === "parallel" || target === "perpendicular";
+  const formattedValue = formatEditableDistance(value, isProjection);
+  const [draft, setDraft] = useState(() => formattedValue);
   const [error, setError] = useState("");
   const focusedRef = useRef(false);
   const cancelBlurRef = useRef(false);
-  const symbol = target === "source" ? "p" : "q";
-  const label = target === "source" ? "Source–crystal distance p" : "Crystal–detector distance q";
+  const changedRef = useRef(false);
+  const symbol = target === "source" ? "p" : target === "parallel" ? "|q∥|" : target === "perpendicular" ? "|q⊥|" : "q";
+  const label = target === "source" ? "Source–crystal distance p" : target === "parallel"
+    ? "Along-beam projection |q∥|" : target === "perpendicular"
+      ? "Across-beam projection |q⊥|" : "Crystal–detector distance q";
+  const hintId = `${target}-distance-input-hint`;
+  const hint = disabledReason || (isProjection
+    ? "Type a projection distance; Enter or leaving the field updates q at the current 2θ and recalculates. The other projection follows. Escape cancels."
+    : "Type a distance; Enter or leaving the field recalculates. Escape cancels.");
 
   useEffect(() => {
-    if (!focusedRef.current) setDraft(formatEditableDistance(value));
-  }, [value]);
+    if (!focusedRef.current || disabledReason) {
+      setDraft(formattedValue);
+      setError("");
+      changedRef.current = false;
+    }
+  }, [formattedValue, disabledReason]);
 
   function submit() {
+    if (disabledReason || !changedRef.current) return true;
     const parsed = parseEditableDistance(draft);
     if (parsed === null) {
       setError("Enter a finite distance greater than 0 m.");
       return false;
     }
+    if (parsed !== Number(value) && onCommit(target, parsed) === false) {
+      setError("This projection cannot determine a finite detector distance.");
+      return false;
+    }
     setError("");
-    setDraft(formatEditableDistance(parsed));
-    if (parsed !== Number(value)) onCommit(target, parsed);
+    changedRef.current = false;
+    setDraft(formatEditableDistance(parsed, isProjection));
     return true;
   }
 
   return (
     <div
-      className={`optics-inline-distance optics-inline-distance--${target}`}
-      style={{ left: `${position.x}px`, top: `${position.y}px` }}
+      className={`optics-inline-distance optics-inline-distance--${target}${isProjection ? " optics-inline-distance--projection" : ""}${position ? "" : " optics-inline-distance--summary"}`}
+      style={position ? { left: `clamp(76px, ${position.x}px, calc(100% - 76px))`, top: `${position.y}px` } : undefined}
+      title={hint}
     >
       <label>
         <i>{symbol}</i> =
@@ -98,13 +124,15 @@ function DistanceLabelInput({ target, value, position, onCommit }) {
           value={draft}
           aria-label={`${label} in meters`}
           aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${target}-distance-input-error` : undefined}
+          disabled={Boolean(disabledReason)}
+          aria-describedby={[hintId, error ? `${target}-distance-input-error` : null].filter(Boolean).join(" ")}
           onFocus={(event) => {
             focusedRef.current = true;
             setError("");
             event.currentTarget.select();
           }}
           onChange={(event) => {
+            changedRef.current = true;
             setDraft(event.target.value);
             setError("");
           }}
@@ -115,7 +143,8 @@ function DistanceLabelInput({ target, value, position, onCommit }) {
               else submit();
             } else if (event.key === "Escape") {
               cancelBlurRef.current = true;
-              setDraft(formatEditableDistance(value));
+              changedRef.current = false;
+              setDraft(formattedValue);
               setError("");
               event.currentTarget.blur();
             }
@@ -127,13 +156,15 @@ function DistanceLabelInput({ target, value, position, onCommit }) {
               return;
             }
             if (!submit()) {
-              setDraft(formatEditableDistance(value));
+              changedRef.current = false;
+              setDraft(formattedValue);
               setError("Invalid entry; previous distance restored.");
             }
           }}
         />
         <span>m</span>
       </label>
+      <span className="sr-only" id={hintId}>{hint}</span>
       {error ? <span className="optics-inline-distance__error" id={`${target}-distance-input-error`} role="alert">{error}</span> : null}
     </div>
   );
@@ -583,6 +614,7 @@ export function OpticsCanvas({
   result = null,
   onSourceDistanceChange,
   onDetectorDistanceChange,
+  projectionAngleCurrent = false,
 }) {
   const [scaleMode, setScaleMode] = useState(SCALE_SCHEMATIC);
   const [showGuides, setShowGuides] = useState(true);
@@ -618,11 +650,19 @@ export function OpticsCanvas({
         y: rect.top + rect.height / 2 - shellRect.top,
       };
     };
-    const next = { source: center(source), detector: center(detector) };
+    const annotations = Array.from(stage.querySelectorAll('.optics-plot-figure g.annotation'));
+    const parallel = annotations.find((node) => node.textContent.trim().startsWith("|q∥|"));
+    const perpendicular = annotations.find((node) => node.textContent.trim().startsWith("|q⊥|"));
+    const next = {
+      source: center(source), detector: center(detector),
+      parallel: parallel ? center(parallel) : null,
+      perpendicular: perpendicular ? center(perpendicular) : null,
+    };
     setLabelPositions((previous) =>
-      previous && ["source", "detector"].every((target) =>
+      previous && ["source", "detector", "parallel", "perpendicular"].every((target) =>
+        previous[target] === next[target] || (previous[target] && next[target] &&
         Math.abs(previous[target].x - next[target].x) < 0.5 &&
-        Math.abs(previous[target].y - next[target].y) < 0.5,
+        Math.abs(previous[target].y - next[target].y) < 0.5),
       ) ? previous : next,
     );
   }, []);
@@ -713,6 +753,20 @@ export function OpticsCanvas({
     },
     [onDetectorDistanceChange, onSourceDistanceChange],
   );
+
+  const projectionAngleDeg = isAvailableNumber(result?.bragg_angle_deg) ? Number(result.bragg_angle_deg) : null;
+  const commitProjection = useCallback((mode, projectionMeters) => {
+    if (!projectionAngleCurrent) return false;
+    const q = detectorDistanceFromProjection(projectionMeters, mode, projectionAngleDeg);
+    if (q === null) return false;
+    void commitDistance("detector", q);
+    return true;
+  }, [commitDistance, projectionAngleCurrent, projectionAngleDeg]);
+  const projectionDisabledReason = (mode) => !projectionAngleCurrent
+    ? "Update results for the current energy, material, and reflection before editing projections."
+    : detectorProjectionFactor(mode, projectionAngleDeg) === null
+      ? "This projection is zero at the current 2θ; edit q or the other projection."
+      : "";
 
   const handleRelayouting = useCallback(
     (update) => {
@@ -815,6 +869,7 @@ export function OpticsCanvas({
       data-scale-mode={scaleMode}
       data-guides-visible={showGuides}
       data-inline-distance-inputs={showGuides && Boolean(labelPositions)}
+      data-inline-projection-inputs={showGuides && !compactPlot && Boolean(labelPositions?.parallel && labelPositions?.perpendicular)}
       data-compact-plot={compactPlot}
       data-local-distance-draft={hasLocalDistanceDraft}
       data-dragging={preview?.target || "false"}
@@ -872,6 +927,17 @@ export function OpticsCanvas({
           </>
         ) : null}
 
+        {showGuides && !compactPlot && labelPositions?.parallel && labelPositions?.perpendicular ? (
+          <>
+            <DistanceLabelInput target={DETECTOR_DISTANCE_MODES.PARALLEL}
+              value={geometry.detectorLongitudinalM} position={labelPositions.parallel}
+              onCommit={commitProjection} disabledReason={projectionDisabledReason(DETECTOR_DISTANCE_MODES.PARALLEL)} />
+            <DistanceLabelInput target={DETECTOR_DISTANCE_MODES.PERPENDICULAR}
+              value={geometry.detectorTransverseM} position={labelPositions.perpendicular}
+              onCommit={commitProjection} disabledReason={projectionDisabledReason(DETECTOR_DISTANCE_MODES.PERPENDICULAR)} />
+          </>
+        ) : null}
+
         <div className="optics-scale-switch" role="group" aria-label="Plot scale">
           <button
             type="button"
@@ -902,8 +968,9 @@ export function OpticsCanvas({
 
         <p className="optics-scale-note" role="note">
           {scaleMode === SCALE_PHYSICAL
-            ? "Positions are in meters; device marks, crystal thickness, and ray envelope are illustrative."
-            : "Distances are compressed in this schematic; the scattering angle is unchanged. Device marks and ray envelope are illustrative."}
+            ? "Physical distances in m. Device shapes and beam envelope are illustrative."
+            : "Schematic distances; true scattering angle. Device shapes and beam envelope are illustrative."}
+          {!projectionAngleCurrent ? " Update results to edit q projections." : ""}
           {hasLocalDistanceDraft && result
             ? " The shown p and q are a draft; angle and focus still come from the previous calculation."
             : ""}
@@ -916,14 +983,18 @@ export function OpticsCanvas({
         </p>
 
         {showGuides && compactPlot && result ? (
-          <div className="optics-guide-summary" aria-hidden="true">
+          <div className="optics-guide-summary">
             {isAvailableNumber(result.geometric_focus_m) ? (
               <span>{focusKind === "virtual" ? "Virtual" : "Real"} focus <i>f</i><sub>g</sub> {formatNumber(result.geometric_focus_m, 3)} m</span>
             ) : null}
             {isAvailableNumber(result.bragg_angle_deg) ? (
               <>
-                <span>Along beam |<i>q</i>∥| {formatNumber(geometry.detectorLongitudinalM, 3)} m</span>
-                <span>Across beam |<i>q</i>⊥| {formatNumber(geometry.detectorTransverseM, 3)} m</span>
+                <DistanceLabelInput target={DETECTOR_DISTANCE_MODES.PARALLEL}
+                  value={geometry.detectorLongitudinalM} onCommit={commitProjection}
+                  disabledReason={projectionDisabledReason(DETECTOR_DISTANCE_MODES.PARALLEL)} />
+                <DistanceLabelInput target={DETECTOR_DISTANCE_MODES.PERPENDICULAR}
+                  value={geometry.detectorTransverseM} onCommit={commitProjection}
+                  disabledReason={projectionDisabledReason(DETECTOR_DISTANCE_MODES.PERPENDICULAR)} />
               </>
             ) : null}
           </div>

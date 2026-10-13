@@ -40,7 +40,7 @@ import { browserStorage, readDraft, writeDraft } from "./lib/draftStorage.js";
 import { DETECTOR_DISTANCE_MODES, sameBraggInputs } from "./lib/detectorProjection.js";
 import { createCalculationSession, sameScientificConfig } from "./lib/calculationSession.js";
 import { formatMetricDelta, formatValue, hasMetric, unavailableReason } from "./lib/formatMetrics.js";
-import { formatComparisonDelta } from "./lib/comparisonData.js";
+import { compareScientificInputs, formatComparisonDelta } from "./lib/comparisonData.js";
 import { VersionBadge } from "./components/VersionBadge.jsx";
 
 const MATERIAL_OPTIONS = [
@@ -128,6 +128,7 @@ export function App() {
     () => restoredDraft?.detectorDistanceMode ?? DETECTOR_DISTANCE_MODES.RAY,
   );
   const [mobileView, setMobileView] = useState("workbench");
+  const [workbenchView, setWorkbenchView] = useState("optics");
   const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [replacementUndo, setReplacementUndo] = useState(null);
   const workspaceRef = useRef(null);
@@ -164,8 +165,8 @@ export function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [sections, setSections] = useState({
     crystal: true,
-    geometry: true,
-    detector: true,
+    geometry: false,
+    detector: false,
   });
 
   const configRef = useRef(config);
@@ -262,7 +263,7 @@ export function App() {
     if (mobileView !== "workbench") return undefined;
     const frame = window.requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     return () => window.cancelAnimationFrame(frame);
-  }, [mobileView]);
+  }, [mobileView, workbenchView]);
 
   useEffect(() => {
     const handleShortcut = (event) => {
@@ -627,6 +628,8 @@ export function App() {
   }, [calculatedConfig, calculation.error, calculation.isCurrent, loading, result]);
 
   const handleCompare = useCallback(() => {
+    setMobileView("workbench");
+    setWorkbenchView("comparison");
     if (!baseline) saveCurrentAsBaseline();
     window.requestAnimationFrame(() => {
       comparisonRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -648,10 +651,22 @@ export function App() {
     });
   }, []);
 
+  const showWorkbench = (view = "optics") => {
+    setMobileView("workbench");
+    setWorkbenchView(view);
+    window.requestAnimationFrame(() => document.getElementById("workbench-navigation")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  };
+  const jumpToSection = (section) => {
+    setSections({ crystal: false, geometry: false, detector: false, [section]: true });
+    window.requestAnimationFrame(() => document.getElementById(`${section}-toggle`)?.focus());
+  };
+  const pendingChanges = compareScientificInputs(calculatedConfig, config);
+  const sectionErrorCount = (section) => Object.keys(fieldErrors).filter((field) => (FIELD_SECTIONS[field] ?? "crystal") === section).length;
   const fieldErrorCount = Object.keys(fieldErrors).length;
   const hasStaleResult = Boolean(result && (dirty || fieldErrorCount || serverError));
   const canSetBaseline = Boolean(result && calculatedConfig && calculation.isCurrent && !loading && !calculation.error);
   const canSubmit = !loading || !sameScientificConfig(config, calculation.pending?.config);
+  const calculateLabel = loading && !canSubmit ? "Calculating…" : dirty ? "Update results" : result ? "Recalculate" : "Calculate";
   const resultSnapshotLabel = calculatedConfig
     ? `${calculatedConfig.material}(${calculatedConfig.h}${calculatedConfig.k}${calculatedConfig.l}), ${formatValue(Number(calculatedConfig.energy_kev) * 1000)} eV`
     : null;
@@ -753,7 +768,7 @@ export function App() {
             type="button"
             onClick={() => void calculate(configRef.current)}
             disabled={!canSubmit}
-            aria-label={loading && !canSubmit ? "Calculating" : "Recalculate current setup"}
+            aria-label={calculateLabel}
             title="Recalculate (Ctrl / ⌘ + Enter)"
           >
             {loading ? (
@@ -761,17 +776,7 @@ export function App() {
             ) : (
               <IconRefresh aria-hidden="true" size={18} />
             )}
-            <span>{loading && !canSubmit ? "Calculating" : "Recalculate"}</span>
-          </button>
-          <button
-            className="button button--outline secondary-action"
-            type="button"
-            onClick={handleCompare}
-            disabled={!baseline && !canSetBaseline}
-            aria-label={baseline ? "View comparison" : "Set current result as comparison baseline"}
-          >
-            <IconGitCompare aria-hidden="true" size={18} />
-            <span>{baseline ? "View comparison" : "Set baseline"}</span>
+            <span>{calculateLabel}</span>
           </button>
           <div className="overflow-menu" ref={menuRef}>
             <input
@@ -831,7 +836,7 @@ export function App() {
       </header>
 
       <nav className="mobile-section-nav" aria-label="Workspace sections">
-        <button type="button" aria-pressed={mobileView === "workbench"} onClick={() => setMobileView("workbench")}>Optics &amp; results</button>
+        <button type="button" aria-pressed={mobileView === "workbench"} onClick={() => showWorkbench(workbenchView)}>Optics &amp; results</button>
         <button type="button" aria-pressed={mobileView === "parameters"} onClick={() => setMobileView("parameters")}>Parameters {dirty ? <span className="unsaved-dot" aria-label="Changes not calculated" /> : null}</button>
       </nav>
 
@@ -847,33 +852,7 @@ export function App() {
       ) : null}
 
       <main id="workspace" className="app-main">
-        <div className="workspace" ref={workspaceRef} data-mobile-view={mobileView}>
-          <div className="workspace__main">
-          <section id="optics-workbench-panel" className="canvas-panel" aria-labelledby="optics-workspace-heading">
-            <div className="canvas-panel__topbar">
-              <div>
-                <h2 id="optics-workspace-heading">Optics workbench</h2>
-              </div>
-              <div
-                className={`calculation-status calculation-status--${calculationStatus.kind}`}
-                role="status"
-                aria-live="polite"
-              >
-                {calculationStatus.kind === "loading" ? (
-                  <IconLoader2 className="icon-spin" aria-hidden="true" size={15} />
-                ) : calculationStatus.kind === "success" ? (
-                  <IconCheck aria-hidden="true" size={15} />
-                ) : calculationStatus.kind === "error" ? (
-                  <IconAlertTriangle aria-hidden="true" size={15} />
-                ) : (
-                  <IconCircleDashed aria-hidden="true" size={15} />
-                )}
-                {calculationStatus.label}
-                {loading ? <button className="text-button" type="button" onClick={() => sessionRef.current.cancel()} aria-label="Cancel calculation">Cancel</button> : null}
-              </div>
-            </div>
-
-            <div className="canvas-panel__messages">
+        {serverError || generalIssues.length || fieldErrorCount ? <div className="workspace-errors">
               {serverError || generalIssues.length ? (
                 <div className="calculation-message calculation-message--error" role="alert">
                   <IconAlertTriangle aria-hidden="true" size={19} stroke={1.8} />
@@ -905,6 +884,46 @@ export function App() {
                 </div>
               ) : null}
 
+        </div> : null}
+        <div className="workspace" ref={workspaceRef} data-mobile-view={mobileView}>
+          <div className="workspace__main">
+          <nav id="workbench-navigation" className="workbench-navigation" aria-label="Analysis views">
+            {[['optics', 'Optics & results'], ['response', 'Crystal response'], ['comparison', 'Compare setups']].map(([view, label]) => (
+              <button key={view} type="button" aria-pressed={workbenchView === view} onClick={() => setWorkbenchView(view)}>{label}{view === 'comparison' && baseline ? <span className="baseline-dot" aria-label="Baseline saved" /> : null}</button>
+            ))}
+          </nav>
+          {workbenchView !== "optics" && (loading || hasStaleResult) ? (
+            <div className={`analysis-status calculation-status calculation-status--${calculationStatus.kind}`} role="status">
+              <span>{loading ? calculationStatus.label : `Previous result: ${resultSnapshotLabel}. Update results to apply your edits.`}</span>
+              {loading ? <button type="button" className="text-button" onClick={() => sessionRef.current.cancel()}>Cancel calculation</button> : null}
+            </div>
+          ) : null}
+          <div className="workbench-view" hidden={workbenchView !== "optics"}>
+          <section id="optics-workbench-panel" className="canvas-panel" aria-labelledby="optics-workspace-heading">
+            <div className="canvas-panel__topbar">
+              <div>
+                <h2 id="optics-workspace-heading">Optics workbench</h2>
+              </div>
+              <div
+                className={`calculation-status calculation-status--${calculationStatus.kind}`}
+                role="status"
+                aria-live="polite"
+              >
+                {calculationStatus.kind === "loading" ? (
+                  <IconLoader2 className="icon-spin" aria-hidden="true" size={15} />
+                ) : calculationStatus.kind === "success" ? (
+                  <IconCheck aria-hidden="true" size={15} />
+                ) : calculationStatus.kind === "error" ? (
+                  <IconAlertTriangle aria-hidden="true" size={15} />
+                ) : (
+                  <IconCircleDashed aria-hidden="true" size={15} />
+                )}
+                {calculationStatus.label}
+                {loading ? <button className="text-button" type="button" onClick={() => sessionRef.current.cancel()} aria-label="Cancel calculation">Cancel</button> : null}
+              </div>
+            </div>
+
+            <div className="canvas-panel__messages">
               {bannerWarnings.length ? (
                 <div className="calculation-message calculation-message--warning" role="status">
                   <IconAlertTriangle aria-hidden="true" size={19} stroke={1.8} />
@@ -930,6 +949,7 @@ export function App() {
                 result={result}
                 onSourceDistanceChange={handleSourceDistanceChange}
                 onDetectorDistanceChange={handleDetectorDistanceChange}
+                projectionAngleCurrent={projectionAngleCurrent}
               /> : (
                 <div className="canvas-empty" role="status">
                   {loading ? <IconLoader2 className="icon-spin" aria-hidden="true" size={28} /> : <IconAtom2 aria-hidden="true" size={32} />}
@@ -942,7 +962,7 @@ export function App() {
             <div className="canvas-panel__footer">
               <p>
                 <IconRulerMeasure aria-hidden="true" size={16} />
-                <span>Drag the source or detector to adjust <em>p</em> or <em>q</em>; release to recalculate.</span>
+                <span>Drag source / detector, or type <em>p</em>, <em>q</em>, |q∥| or |q⊥|.</span>
               </p>
               {result ? (
                 <dl className="geometry-readout" aria-label="Calculated geometry summary">
@@ -959,7 +979,7 @@ export function App() {
                 </dl>
               ) : null}
             </div>
-            {resultSnapshotLabel ? (
+            {resultSnapshotLabel && hasStaleResult ? (
               <p className={`result-snapshot${hasStaleResult ? " result-snapshot--stale" : ""}`}>
                 Calculated: {resultSnapshotLabel}. {hasStaleResult ? "Showing previous result; changes are not calculated." : "Matches the current inputs."}
               </p>
@@ -969,7 +989,6 @@ export function App() {
         <section className="results-strip" aria-labelledby="results-heading">
           <div className="results-strip__heading">
             <div>
-              <p className="eyebrow">Calculated outputs</p>
               <h2 id="results-heading">Calculated results</h2>
             </div>
             {resultSnapshotLabel ? <span>{hasStaleResult ? "Showing previous result" : `Calculated: ${resultSnapshotLabel}`}</span> : null}
@@ -1055,6 +1074,14 @@ export function App() {
           </div>
         </section>
 
+          </div>
+          <div className="workbench-view" hidden={workbenchView !== "comparison"}>
+            <div className="comparison-intro">
+              <IconGitCompare aria-hidden="true" size={22} />
+              <div><h2>Compare two setups</h2><p>{baseline ? "Edit parameters and update results to compare with your saved baseline." : "Save a calculated setup as your baseline, then adjust parameters to see what changes."}</p></div>
+              {!baseline ? <button type="button" className="button button--primary" onClick={handleCompare} disabled={!canSetBaseline}>Set current result as baseline</button> : null}
+              {!baseline && !canSetBaseline ? <p className="comparison-intro__hint">Calculate the current inputs first to enable a baseline.</p> : null}
+            </div>
         <div className="comparison-region" ref={comparisonRef}>
           <ComparisonPanel
             baseline={baseline}
@@ -1066,6 +1093,8 @@ export function App() {
           />
         </div>
 
+          </div>
+          <div className="workbench-view" hidden={workbenchView !== "response"}>
         <ReflectivityPlot result={result} config={calculatedConfig || displayedConfig} />
 
         <section className="coverage-panel" aria-labelledby="coverage-heading">
@@ -1205,7 +1234,7 @@ export function App() {
             </div>
           </details>
         </section>
-
+          </div>
           </div>
 
           <div
@@ -1267,6 +1296,20 @@ export function App() {
               </span>
             </div>
 
+            <nav className="inspector-navigation" aria-label="Jump to parameters">
+              {[['crystal', 'Crystal'], ['geometry', 'Geometry'], ['detector', 'Detector']].map(([section, label], index) => (
+                <button type="button" key={section} onClick={() => jumpToSection(section)}><span>{index + 1}</span>{label}{sectionErrorCount(section) ? <span className="parameter-error-dot" aria-label="Has errors" /> : null}</button>
+              ))}
+            </nav>
+            {pendingChanges.length ? (
+              <div className="pending-changes">
+                <details>
+                  <summary>{pendingChanges.length} {pendingChanges.length === 1 ? "parameter changed" : "parameters changed"}<IconChevronDown aria-hidden="true" size={14} /></summary>
+                  <ul>{pendingChanges.map((change) => <li key={change.key}><button type="button" onClick={() => focusErrorField(change.key)}>{change.label}<span>{change.baseline} → <strong>{change.current}</strong> {change.unit}</span></button></li>)}</ul>
+                </details>
+                <button type="button" className="text-button" onClick={handleRevert} title="Restore the inputs used for the displayed result"><IconArrowBackUp aria-hidden="true" size={14} />Revert</button>
+              </div>
+            ) : null}
             <form
               className="inspector__form"
               onSubmit={(event) => {
@@ -1279,6 +1322,8 @@ export function App() {
                 id="crystal"
                 title="Crystal"
                 icon={IconAtom2}
+                summary={`${config.material}(${config.h}${config.k}${config.l}) · ${energyInputEv || "—"} eV`}
+                errorCount={sectionErrorCount("crystal")}
                 expanded={sections.crystal}
                 onToggle={() => toggleSection("crystal")}
               >
@@ -1302,6 +1347,14 @@ export function App() {
                       </span>
                     </span>
                   </legend>
+                  <div className="reflection-shortcuts" role="group" aria-label="Common reflections">
+                    {[[1, 1, 1], [2, 2, 0], [3, 1, 1]].map(([h, k, l]) => <button key={`${h}${k}${l}`} type="button" aria-pressed={Number(config.h) === h && Number(config.k) === k && Number(config.l) === l} onClick={() => {
+                      setReplacementUndo(null);
+                      commitConfig({ ...configRef.current, h, k, l });
+                      setSelectedPresetId("");
+                    }}>({h}{k}{l})</button>)}
+                    <span>or enter h, k, l</span>
+                  </div>
                   <div className="hkl-control__inputs">
                     <FieldControl
                       id="h-index"
@@ -1410,31 +1463,15 @@ export function App() {
                   error={fieldErrors.polarization}
                   hint="Unpolarized reports the average of the σ and π reflectivity profiles."
                 />
-                <div className={`model-callout model-callout--${config.geometry}`}>
-                  <IconInfoCircle aria-hidden="true" size={16} stroke={1.8} />
-                  <p>
-                    {config.geometry === "laue" ? (
-                      <>
-                        <strong>Laue transmission:</strong> thickness strongly changes the
-                        Penning–Polder profile. The 50 µm default is intentionally thin. A
-                        Borrmann-fan spatial contribution is not separately included in the total
-                        unless the result assumptions explicitly say it is.
-                      </>
-                    ) : (
-                      <>
-                        <strong>Bragg reflection:</strong> the primary intrinsic response uses the
-                        XOP bent-crystal multilamellar model. Any fallback model is named with the
-                        result.
-                      </>
-                    )}
-                  </p>
-                </div>
+                {config.geometry === "laue" ? <p className="crystal-model-hint"><IconInfoCircle aria-hidden="true" size={15} />Laue response is thickness-sensitive. Review Crystal response for model limits.</p> : null}
               </InspectorSection>
 
               <InspectorSection
                 id="geometry"
                 title="Geometry"
                 icon={IconAdjustmentsHorizontal}
+                summary={`p ${config.source_distance_m || "—"} m · R ${config.bending_radius_m || "—"} m`}
+                errorCount={sectionErrorCount("geometry")}
                 expanded={sections.geometry}
                 onToggle={() => toggleSection("geometry")}
               >
@@ -1502,6 +1539,8 @@ export function App() {
                 id="detector"
                 title="Detector"
                 icon={IconDeviceDesktop}
+                summary={`q ${config.detector_distance_m || "—"} m · ${config.pixel_size_um || "—"} µm pixels`}
+                errorCount={sectionErrorCount("detector")}
                 expanded={sections.detector}
                 onToggle={() => toggleSection("detector")}
               >
@@ -1527,11 +1566,11 @@ export function App() {
                 {result ? (
                   <div className="detector-readout" aria-label="Detector calculation readout">
                     <div>
-                      <span>Beam width</span>
+                      <span>{hasStaleResult ? "Previous beam width" : "Beam width"}</span>
                       <strong>{formatValue(result.detector_beam_width_mm)} mm</strong>
                     </div>
                     <div>
-                      <span>Sampling</span>
+                      <span>{hasStaleResult ? "Previous sampling" : "Sampling"}</span>
                       <strong>{formatValue(result.detector_sampling_ev_per_pixel)} eV/px</strong>
                     </div>
                   </div>
@@ -1539,17 +1578,21 @@ export function App() {
               </InspectorSection>
 
               <div className="inspector__submit">
-                {dirty && result ? <button className="text-button" type="button" onClick={handleRevert}><IconArrowBackUp aria-hidden="true" size={15} />Revert to calculated inputs</button> : null}
+                <div className="submit-status" role="status">
+                  <span className={`inspector__state${dirty ? " is-dirty" : ""}`}>{calculationStatus.label}</span>
+                  {loading ? <button type="button" className="text-button" onClick={() => sessionRef.current.cancel()}>Cancel calculation</button> : fieldErrorCount ? <button type="button" className="text-button" onClick={() => focusErrorField(Object.keys(fieldErrors)[0])}>Fix {fieldErrorCount} {fieldErrorCount === 1 ? "field" : "fields"}</button> : null}
+                </div>
+                {serverError || generalIssues.length ? <p className="submit-error" role="alert">{serverError || generalIssues.join(" ")}</p> : null}
                 <button className="button button--primary button--full" type="submit" disabled={!canSubmit}>
                   {loading && !canSubmit ? (
                     <IconLoader2 className="icon-spin" aria-hidden="true" size={18} />
                   ) : (
                     <IconRefresh aria-hidden="true" size={18} />
                   )}
-                  {loading && !canSubmit ? "Calculating…" : "Recalculate setup"}
+                  {calculateLabel}
                 </button>
                 <p>{draftSaved ? "Inputs saved in this browser" : "Browser storage unavailable — use Save to keep inputs"}</p>
-                <button className="text-button mobile-results-button" type="button" onClick={() => setMobileView("workbench")}>View optics &amp; results</button>
+                <button className="text-button mobile-results-button" type="button" onClick={() => showWorkbench()}>View optics &amp; results</button>
               </div>
             </form>
           </aside>

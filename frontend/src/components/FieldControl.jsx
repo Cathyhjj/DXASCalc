@@ -1,17 +1,14 @@
 import { IconInfoCircle, IconMinus, IconPlus } from "@tabler/icons-react";
 import { useState } from "react";
 
-function FieldHint({ hint, label }) {
-  const [open, setOpen] = useState(false);
+function FieldHint({ hintId, label, open, onToggle }) {
   return (
     <span className="field-help">
       <button type="button" className="field-help__toggle" aria-label={`Help for ${label}`}
-        aria-expanded={open} onClick={() => setOpen((previous) => !previous)}
-        onBlur={() => setOpen(false)}
-        onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); } }}>
+        aria-expanded={open} aria-controls={hintId} aria-describedby={hintId}
+        onClick={onToggle}>
         <IconInfoCircle aria-hidden="true" size={14} stroke={1.8} />
       </button>
-      {open ? <span className="field-help__text" role="tooltip">{hint}</span> : null}
     </span>
   );
 }
@@ -87,6 +84,7 @@ export function FieldControl({
   inputMode = "decimal",
   className = "",
 }) {
+  const [hintOpen, setHintOpen] = useState(false);
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
@@ -112,14 +110,32 @@ export function FieldControl({
   };
 
   return (
-    <div className={controlClassName}>
+    <div
+      className={controlClassName}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setHintOpen(false);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && hintOpen) {
+          event.stopPropagation();
+          setHintOpen(false);
+        }
+      }}
+    >
       <div className="field-control__label-row field-label">
         <label className="field-control__label" htmlFor={id}>
           {label}
           {unit ? <span className="sr-only"> ({unit})</span> : null}
         </label>
         {hint ? (
-          <FieldHint hint={hint} label={label} />
+          <FieldHint
+            hintId={hintId}
+            label={label}
+            open={hintOpen}
+            onToggle={() => setHintOpen((previous) => !previous)}
+          />
         ) : null}
       </div>
 
@@ -197,9 +213,9 @@ export function FieldControl({
       </div>
 
       {hint ? (
-        <span className="sr-only" id={hintId}>
+        <p className={hintOpen ? "field-control__hint field-help__text" : "sr-only"} id={hintId}>
           {hint}
-        </span>
+        </p>
       ) : null}
       {error ? (
         <p className="field-control__error field-error" id={errorId} role="alert">

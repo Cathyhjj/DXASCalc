@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { IconChevronDown, IconChevronUp } from "@tabler/icons-react";
 
-export function InspectorSection({ id, title, icon: Icon, expanded, onToggle, children }) {
+export function InspectorSection({ id, title, icon: Icon, expanded, onToggle, summary, errorCount = 0, children }) {
   const sectionRef = useRef(null);
   const dragRef = useRef(null);
   const [height, setHeight] = useState(null);
   const [measuredHeight, setMeasuredHeight] = useState(120);
   const minHeight = 120;
   const maxHeight = 900;
+  const hasErrors = errorCount > 0;
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -37,26 +38,35 @@ export function InspectorSection({ id, title, icon: Icon, expanded, onToggle, ch
 
   return (
     <section
+      id={`${id}-section`}
       ref={sectionRef}
-      className={`inspector-section${expanded ? " inspector-section--open" : ""}${height !== null ? " inspector-section--resized" : ""}`}
+      className={`inspector-section${expanded ? " inspector-section--open" : ""}${height !== null ? " inspector-section--resized" : ""}${hasErrors ? " inspector-section--error" : ""}`}
       style={expanded && height !== null ? { height: `${height}px` } : undefined}
+      aria-labelledby={`${id}-toggle`}
     >
       <button
+        id={`${id}-toggle`}
         className="inspector-section__toggle"
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={`${id}-content`}
       >
-        <span className="inspector-section__title">
-          <Icon aria-hidden="true" size={17} stroke={1.8} />
-          {title}
+        <span className="inspector-section__heading">
+          <span className="inspector-section__title">
+            <Icon aria-hidden="true" size={17} stroke={1.8} />
+            {title}
+          </span>
+          {!expanded && summary ? <span className="inspector-section__summary">{summary}</span> : null}
         </span>
-        {expanded ? (
-          <IconChevronUp aria-hidden="true" size={17} />
-        ) : (
-          <IconChevronDown aria-hidden="true" size={17} />
-        )}
+        <span className="inspector-section__indicators">
+          {hasErrors ? <span className="inspector-section__error-count">{errorCount} {errorCount === 1 ? "error" : "errors"}</span> : null}
+          {expanded ? (
+            <IconChevronUp aria-hidden="true" size={17} />
+          ) : (
+            <IconChevronDown aria-hidden="true" size={17} />
+          )}
+        </span>
       </button>
       <div className="inspector-section__content" id={`${id}-content`} hidden={!expanded}>
         {children}

@@ -81,8 +81,19 @@ results, so it can be shared or saved alongside an experiment.
 
 ## Workbench controls and recovery
 
-- **Recalculate** or **Ctrl/⌘ + Enter** calculates the edited setup. Diagram
+- **Update results** (or **Ctrl/⌘ + Enter**) calculates edited inputs; the
+  button reads **Recalculate** when the result is current. Diagram
   distance edits, geometry changes, and presets calculate when applied.
+- **Optics & results**, **Crystal response**, and **Compare setups** separate
+  the optical layout, detailed model response/coverage, and baseline comparison.
+  All views keep the same inputs and accepted result. Set a baseline from
+  **Compare setups**, then edit inputs and update results to compare them.
+- The parameter shortcuts open **Crystal**, **Geometry**, or **Detector**.
+  Individual section headings can also expand multiple groups; collapsed
+  headings retain input summaries and error counts. Common reflection buttons
+  fill h, k, and l without replacing the rest of the setup.
+- Expand the pending-change count to review old and new input values. **Revert**
+  restores the last calculated inputs; selecting a changed field focuses it.
 - Inputs are saved locally in the browser, including unfinished numeric fields.
   On reopening, those inputs are restored and calculated again. Results and
   comparison baselines are not stored. If browser storage is unavailable, use
@@ -97,15 +108,21 @@ results, so it can be shared or saved alongside an experiment.
   running on the server can finish within its existing timeout.
 - Narrow screens switch between **Optics & results** and **Parameters**, with
   the calculate action kept available at the bottom of the parameter view.
-- Select the info icon beside an input to read its explanation. Use the plot
+- Select the info icon beside an input to expand its explanation beneath the
+  control; Escape closes it. Use the plot
   toolbar to zoom; the mouse wheel scrolls the page.
 - In **Detector**, choose whether to enter the crystal-to-detector ray distance
   `q`, its along-beam projection `|q∥|`, or its across-beam projection `|q⊥|`.
   Entering a projection converts it to `q` at the current calculated `2θ`;
-  choose **Recalculate setup** to update the result. If material, reflection,
+  choose **Update results** to update the result. If material, reflection,
   or energy changes, recalculate first so the conversion uses the new angle.
   Saved configurations retain the physical ray distance `q`; displayed
   projections update when the angle changes.
+- You can also type directly into **|q∥|** or **|q⊥|** on the diagram (or its
+  compact guide summary). Press Enter or leave the field to convert that
+  projection to `q` and recalculate. The other projection updates with it;
+  Escape cancels an edit. Recalculate changed energy/material/reflection inputs
+  first so projection conversion uses the current angle.
 
 ## Test and build
 

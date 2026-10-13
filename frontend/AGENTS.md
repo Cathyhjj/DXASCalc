@@ -2,6 +2,20 @@
 
 Run the local server yourself and open the preview in the browser available to this environment. Do not give the user server-start instructions when you can run it.
 
+## October 12 usability refinement
+
+- The user requested a more user-friendly UI. Keep the optical layout as the
+  default view, with separate Crystal response and Compare setups views in the
+  left column and the shared parameter inspector on the right.
+- Start with Crystal expanded. Parameter shortcuts open one group; individual
+  section headings may expand several. Preserve summaries and error counts on
+  collapsed sections, precise inputs, and desktop resize controls.
+- Keep pending input changes reviewable and reversible. Label the main action
+  Update results when inputs differ from the accepted calculation.
+- Calculation errors and cancellation must remain reachable in every view,
+  including mobile Parameters and mobile Crystal response / Compare setups.
+- Field explanations expand in the form so resized panels cannot clip them.
+
 Before making substantial visual changes, use the Product Design plugin's `get-context` skill when the visual source is unclear or no longer matches the current goal. When the user gives durable prototype-specific design feedback, preferences, or decisions, record them in `AGENTS.md`.
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
@@ -20,6 +34,10 @@ When implementing from a selected generated mock, treat that image as the source
 - Default to a compressed schematic scale for readability and provide a physical-scale toggle. Preserve the numeric inputs as the accessible, precise alternative to pointer dragging.
 - Show source-to-crystal distance p and crystal-to-detector distance q directly beside their corresponding ray segments, with clear dimension guides and values in meters.
 - Make the p and q boxes on the optics diagram directly editable; typed distances must use the same validated recalculation path as dragging the source and detector.
+- The diagram's longitudinal `|q∥|` and transverse `|q⊥|` labels must also accept
+  typed distances. Convert either magnitude to q with the current validated 2θ,
+  update the other projection, and recalculate through the same distance path.
+  Keep these inputs available in the compact guide summary on narrow screens.
 - Provide a checkbox in the optics canvas to show or hide distance labels and construction guides. When shown, dashed ray extensions locate a virtual focus and dashed perpendicular projections show the detector's longitudinal and transverse components.
 - Make the workbench/inspector divider and the Crystal, Geometry, and Detector section boundaries draggable for resizing on desktop; keep the stacked narrow-screen layout in natural content flow.
 - Show and edit photon energy in eV in the interface, including element-edge selection and setup comparison; retain the `energy_kev` API and saved-file field with explicit UI conversion.

@@ -1,5 +1,63 @@
 # DXASCalc design QA
 
+### 2026-10-12 follow-up: editable detector projections
+
+- The diagram's |q∥| and |q⊥| labels now accept typed distances. Both use the
+  existing tested projection conversion and detector-distance calculation path;
+  no independent detector coordinates or new scientific model were introduced.
+- Verified in the built local app: |q∥| = 1.4 m produced q = 1.594801655 m
+  and |q⊥| = 0.76380123 m; entering |q⊥| = 0.9 m updated q and the other
+  projection. These checks used the accepted Si(111), 8000 eV Bragg angle.
+- Focus/blur without editing leaves q unchanged. Invalid and overflowing
+  conversions retain the previous distance; Escape cancels the edit. Changing
+  energy disables both projection inputs until the angle is current again.
+- The compact 390 px guide summary is also editable, with no horizontal
+  overflow. Physical/schematic switching and guide hiding/showing were checked.
+  The original q = 1.5 m was restored after testing.
+- All 51 frontend tests and the production build passed. The existing Plotly
+  bundle-size warning remains.
+
+## 2026-10-12 usability refinement
+
+The geometry-first layout now has three analysis views: Optics & results,
+Crystal response (including model coverage), and Compare setups. They share
+the existing calculation session and right-side parameter inspector.
+
+- Crystal starts expanded; Geometry and Detector show compact input summaries.
+  Section shortcuts open one group, while individual headings still allow
+  several groups and desktop resizing. Common reflection buttons change only
+  h, k, and l.
+- Pending changes show their old/new values, link to the corresponding field,
+  and offer Revert. The primary action reads Update results for an edited
+  draft. Old results remain identified as previous snapshots.
+- Errors remain visible outside the mobile pane switch. Cancel is reachable
+  from Parameters and each analysis view. Help expands beneath its field and
+  closes with Escape; it no longer overlays or clips against a resized panel.
+- The baseline workflow has an explicit empty state and instruction. Detailed
+  model content remains in Crystal response; formulas and API contracts did
+  not change.
+
+### Verification
+
+- Frontend: 51 tests passed. Production build passed with the existing Plotly
+  chunk-size warning.
+- Backend regression suite: 59 tests, OK, with one opt-in integration test
+  skipped (58 passed). Actual browser calculations returned XOP-backed results.
+- In-app browser: energy edit, pending-change review, Revert, baseline creation,
+  updated comparison, invalid radius, mobile field-error focus, help/Escape,
+  cancellation from mobile Crystal response, reflection shortcuts, Laue preset
+  with 50 µm thickness, preset Undo, inline p edit, and physical/schematic scale
+  switching were exercised.
+- Layout checked at 320, 390, 820, and 1280 px. No horizontal document overflow
+  at the checked sizes. Response plot resized correctly after view switching.
+- The built app at `http://127.0.0.1:5002/` showed the default Bragg result:
+  129.0 eV span, 11.98 mm beam width, 0.5923 eV/px sampling, 1.245 eV estimated
+  total FWHM, 14.31° Bragg angle, and 28.62° detector angle. No browser console
+  warnings/errors were captured in that final check.
+
+This is local verification, not publication or experimental validation. A full
+screen-reader audit and Save/Load file round trip were not repeated in this pass.
+
 ## 2026-09-27 UI and robustness review
 
 This review covers the current local implementation and its production build.
